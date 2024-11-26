@@ -16,3 +16,9 @@ It is a fork of OpenAI's Swarm, which is already straightforward. However, agent
 # Going deeper
 1. [Planning and Reasoning with LLMs](https://hexoai.notion.site/Planning-and-Reasoning-with-LLMs-09ed06fe3a3b45f494760d606c4f285b?pvs=74)
 2. [Cognitive Architectures for Language Agents](https://arxiv.org/pdf/2309.02427v3)
+
+# Contributing
+Please feel free to fork this repository and create PRs. We are eager to get PRs on the following:
+1. Additional working examples of Agents
+2. Tracing and Logging of the Agents
+3. Feedback and learning from experiences
