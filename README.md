@@ -12,3 +12,7 @@ It is a fork of OpenAI's Swarm, which is already straightforward. However, agent
 6. Install the requirements using `pip install -r requirements.txt`.
 7. To run the single agent example, execute `python single_agent_example.py`. This script implements a weather agent with capabilities to send emails.
 8. To run the multi-agent example, execute `python multi_agent_example.py`. This script implements sales and refund agents with capabilities to apply discounts and process refunds.
+
+# Going deeper
+1. [Planning and Reasoning with LLMs](https://hexoai.notion.site/Planning-and-Reasoning-with-LLMs-09ed06fe3a3b45f494760d606c4f285b?pvs=74)
+2. [Cognitive Architectures for Language Agents](https://arxiv.org/pdf/2309.02427v3)
