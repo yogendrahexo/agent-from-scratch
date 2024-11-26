@@ -19,7 +19,10 @@ def apply_discount():
 
 triage_agent = Agent(
     name="Triage Agent",
-    instructions="Determine which agent is best suited to handle the user's request, and transfer the conversation to that agent.",
+    instructions="""Determine which agent is best suited to handle the user's request, and transfer the conversation to that agent.
+    - For purchases, pricing, discounts and product inquiries -> Sales Agent
+    - For refunds, returns and complaints -> Refunds Agent
+    Never handle requests directly - always transfer to the appropriate specialist.""",
 )
 sales_agent = Agent(
     name="Sales Agent",
@@ -59,7 +62,14 @@ while True:
     messages.append({"role": "user", "content": user_input})
 
     response = client.run(agent=agent, messages=messages)
-    # pretty_print_messages(response.messages)
-
+    
+    for message in response.messages:
+        if message["role"] == "assistant" and message.get("content"):
+            print(f"\033[94m{message['sender']}\033[0m: {message['content']}")
+        elif message["role"] == "tool":
+            tool_name = message.get("tool_name", "")
+            if tool_name in ["process_refund", "apply_discount"]:
+                print(f"\033[93mSystem\033[0m: {message['content']}")
+    
     messages.extend(response.messages)
     agent = response.agent
