@@ -1,0 +1,7 @@
+name: agent-from-scratch
+channels:
+  - defaults
+dependencies:
+  - python=3.11
+  - pip=23.2.1
+  - packaging
