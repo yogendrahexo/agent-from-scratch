@@ -16,7 +16,7 @@ def send_email(recipient, subject, body):
 
 weather_agent = Agent(
     name="Weather Agent",
-    instructions="You are a helpful agent.",
+    instructions="You are a helpful agent for giving information on weather.",
     functions=[get_weather, send_email],
 )
 
