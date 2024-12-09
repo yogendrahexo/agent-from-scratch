@@ -3,6 +3,9 @@ agent-from-scratch is a Python-based repository for developers and researchers t
 
 It is a fork of OpenAI's Swarm, which is already straightforward. However, agent-from-scratch is even simpler, making it easier to quickly start and understand single and multi-agent systems.
 
+# Walkthrough video
+[![Watch the video](https://img.youtube.com/vi/gA6T6i8qK-I/maxresdefault.jpg)](https://youtu.be/gA6T6i8qK-I)
+
 # Whom is this for?
 It is for software developers and ML Engineers who would like to understand what are agents and how are they built. This is not a Agent framework. This is simply a python script
 
