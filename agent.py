@@ -131,6 +131,7 @@ class Result(BaseModel):
 
 
 class Swarm:
+    # Implements the core logic of orchestrating a single/multi-agent system
     def __init__(
         self,
         client=None,
