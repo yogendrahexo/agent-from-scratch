@@ -6,7 +6,6 @@ from agent import pretty_print_messages, Agent, Swarm
 
 
 def get_weather(location, time="now"):
-    """Get the current weather in a given location. Location MUST be a city."""
     return json.dumps({"location": location, "temperature": "65", "time": time})
 
 
