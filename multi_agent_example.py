@@ -1,7 +1,7 @@
 from dotenv import load_dotenv
 _ = load_dotenv()
 
-from agent import pretty_print_messages, Agent, Swarm
+from agent import Agent, Swarm
 
 # Initialize Swarm with telemetry
 client = Swarm()
