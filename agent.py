@@ -103,6 +103,7 @@ def function_to_json(func) -> dict:
 AgentFunction = Callable[[], Union[str, "Agent", dict]]
 
 class Agent(BaseModel):
+    # Just a simple class. Doesn't contain any methods out of the box
     name: str = "Agent"
     model: str = "gpt-4o"
     instructions: Union[str, Callable[[], str]] = "You are a helpful agent."
