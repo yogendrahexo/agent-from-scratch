@@ -1,3 +1,4 @@
+import os
 from dotenv import load_dotenv
 _ = load_dotenv()
 
@@ -25,11 +26,17 @@ def send_email(recipient, subject, body):
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--provider', type=str, default='oai', 
-                   choices=['oai', 'bant'],
+                   choices=['oai', 'bant', 'azure'],
                    help='Provider to use (default: oai)')
 args = parser.parse_args()
 
-provider = ProviderType.OPENAI if args.provider == 'oai' else ProviderType.BEDROCK_ANTHROPIC
+if args.provider == 'oai':
+    provider = ProviderType.OPENAI
+elif args.provider == 'azure':
+    provider = ProviderType.AZURE_OPENAI
+else:
+    provider = ProviderType.BEDROCK_ANTHROPIC
+
 print(f"Using provider: {provider}")
 
 weather_agent = Agent(

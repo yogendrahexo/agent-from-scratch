@@ -5,16 +5,20 @@ from enum import Enum
 import time
 import random
 from botocore.exceptions import ClientError
+import os
 
-from openai import OpenAI
+from openai import OpenAI, AzureOpenAI
 from pydantic import BaseModel
 from typing_extensions import Literal
 from typing import Union, Callable, List, Optional
 import boto3
 
+
+
 class ProviderType(Enum):
     OPENAI = "openai"
     BEDROCK_ANTHROPIC = "bedrock_anthropic"
+    AZURE_OPENAI = "azure_openai"
 
 def pretty_print_messages(messages, provider: ProviderType = "openai") -> None:
     for message in messages:
@@ -132,6 +136,10 @@ class Agent(BaseModel):
     functions: List[Callable] = []
     tool_choice: Optional[str] = None
     parallel_tool_calls: bool = True
+    # Azure OpenAI specific configs
+    azure_endpoint: Optional[str] = None
+    azure_deployment: Optional[str] = None
+    api_version: str = "2024-02-15-preview"
 
     def __init__(self, **data):
         super().__init__(**data)
@@ -139,6 +147,16 @@ class Agent(BaseModel):
         if 'model' not in data:
             if self.provider == ProviderType.BEDROCK_ANTHROPIC:
                 self.model = "anthropic.claude-3-5-sonnet-20241022-v2:0"
+            if self.provider == ProviderType.AZURE_OPENAI:
+                self.model = os.getenv("AZURE_DEPLOYMENT_NAME")
+                self.api_version = os.getenv("AZURE_API_VERSION")
+                self.azure_endpoint = os.getenv("AZURE_ENDPOINT_URL")
+
+            
+            
+            
+            
+            
 
 class Response(BaseModel):
     # Response is used to encapsulate the entire conversation output
@@ -161,12 +179,16 @@ class Result(BaseModel):
 
 
 class Swarm:
-    def __init__(self, client=None):
+    def __init__(self, client=None, provider: ProviderType = ProviderType.OPENAI):
         self.openai_client = None
         self.bedrock_client = None
+        self.azure_client = None
+        self.default_provider = provider
         
         if client:
-            if isinstance(client, OpenAI):
+            if isinstance(client, AzureOpenAI):
+                self.azure_client = client
+            elif isinstance(client, OpenAI):
                 self.openai_client = client
             else:
                 self.bedrock_client = client
@@ -176,6 +198,14 @@ class Swarm:
             if not self.openai_client:
                 self.openai_client = OpenAI()
             return self.openai_client
+        elif provider == ProviderType.AZURE_OPENAI:
+            if not self.azure_client:
+                self.azure_client = AzureOpenAI(
+                    api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+                    azure_endpoint=os.getenv("AZURE_ENDPOINT_URL"),
+                    api_version=os.getenv('AZURE_API_VERSION', "2024-02-15-preview"),
+                )
+            return self.azure_client
         else:
             if not self.bedrock_client:
                 self.bedrock_client = boto3.client("bedrock-runtime", region_name="us-west-2")
@@ -185,6 +215,8 @@ class Swarm:
         """Convert function to provider-specific format"""
         if provider == ProviderType.OPENAI:
             return self._openai_function_to_json(func)
+        elif provider == ProviderType.AZURE_OPENAI:
+            return self._azure_function_to_json(func)
         else:
             return self._bedrock_function_to_json(func)
 
@@ -217,32 +249,36 @@ class Swarm:
         
         formatted_messages = []
         for msg in history:
-            # Create a clean message without 'sender'
             formatted_msg = {
                 "role": msg["role"],
                 "content": msg["content"] if isinstance(msg["content"], list) else [{"text": msg["content"]}]
             }
             formatted_messages.append(formatted_msg)
 
-        max_retries = 5
-        base_delay = 1  # Start with 1 second delay
-        
         inference_config = {
             "temperature": 0,
             "maxTokens": 2048,
             "topP": 0,
         }
 
+        # Create base parameters
+        params = {
+            "modelId": model_override or agent.model,
+            "messages": formatted_messages,
+            "system": system_prompt,
+            "inferenceConfig": inference_config,
+        }
+
+        # Only add toolConfig if there are tools
+        if tools:
+            params["toolConfig"] = {"tools": tools}
+
+        max_retries = 5
+        base_delay = 1
+
         for attempt in range(max_retries):
             try:
-                response = client.converse(
-                    modelId=model_override or agent.model,
-                    messages=formatted_messages,
-                    system=system_prompt,
-                    toolConfig={"tools": tools} if tools else None,
-                    inferenceConfig=inference_config,
-                )
-                return response
+                return client.converse(**params)
                 
             except ClientError as e:
                 if e.response['Error']['Code'] == 'ThrottlingException':
@@ -254,9 +290,33 @@ class Swarm:
                     continue
                 raise
 
+    def _azure_chat_completion(
+        self,
+        agent: Agent,
+        history: List,
+        model_override: str
+    ):
+        client = self.get_client(ProviderType.AZURE_OPENAI)
+        messages = [{"role": "system", "content": agent.instructions}] + history
+        tools = [self.function_to_json(f, agent.provider) for f in agent.functions]
+        
+        create_params = {
+            "model": model_override or agent.azure_deployment,
+            "messages": messages,
+            "tools": tools or None,
+            "tool_choice": agent.tool_choice,
+        }
+        
+        if tools:
+            create_params["parallel_tool_calls"] = agent.parallel_tool_calls
+        
+        return client.chat.completions.create(**create_params)
+
     def get_chat_completion(self, agent: Agent, history: List, model_override: str = None):
         if agent.provider == ProviderType.OPENAI:
             return self._openai_chat_completion(agent, history, model_override)
+        elif agent.provider == ProviderType.AZURE_OPENAI:
+            return self._azure_chat_completion(agent, history, model_override)
         else:
             return self._bedrock_chat_completion(agent, history, model_override)
 
@@ -315,16 +375,28 @@ class Swarm:
     
     def run(
         self,
-        agent: Agent,
-        messages: List,
+        agent: Optional[Agent] = None,
+        messages: List = None,
         model_override: str = None,
         max_turns: int = float("inf"),
         execute_tools: bool = True,
     ) -> Response:
+        # Create default messages list if none provided
+        if messages is None:
+            messages = []
+        
+        # Create default agent if none provided
+        if agent is None:
+            agent = Agent(
+                name="Assistant",
+                provider=self.default_provider,
+                instructions="You are a helpful assistant."
+            )
+        
         active_agent = agent
         history = copy.deepcopy(messages)
         init_len = len(messages)
-        client = self.get_client(agent.provider)
+        # client = self.get_client(agent.provider)
 
         while len(history) - init_len < max_turns and active_agent:
             completion = self.get_chat_completion(
@@ -333,7 +405,7 @@ class Swarm:
                 model_override=model_override
             )
 
-            if active_agent.provider == ProviderType.OPENAI:
+            if active_agent.provider == ProviderType.OPENAI or active_agent.provider == ProviderType.AZURE_OPENAI:
                 message = completion.choices[0].message
                 message.sender = active_agent.name
                 history.append(json.loads(message.model_dump_json()))
@@ -529,4 +601,41 @@ class Swarm:
                     }
                 }
             }
+        }
+
+    def _azure_function_to_json(self, func) -> dict:
+        """Convert function to Azure OpenAI format"""
+        type_map = {
+            str: "string",
+            int: "integer",
+            float: "number",
+            bool: "boolean",
+            list: "array",
+            dict: "object",
+            type(None): "null",
+        }
+
+        signature = inspect.signature(func)
+        parameters = {}
+        for param in signature.parameters.values():
+            param_type = type_map.get(param.annotation, "string")
+            parameters[param.name] = {"type": param_type}
+
+        required = [
+            param.name
+            for param in signature.parameters.values()
+            if param.default == inspect._empty
+        ]
+
+        return {
+            "type": "function",
+            "function": {
+                "name": func.__name__,
+                "description": func.__doc__ or "",
+                "parameters": {
+                    "type": "object",
+                    "properties": parameters,
+                    "required": required,
+                },
+            },
         }
